@@ -28,12 +28,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24 # 1 day
 
     openrouter_api_key: str | None = None
-    openrouter_model: str = "google/gemini-2.0-flash-lite-preview-02-05:free"
-    openrouter_vision_model: str = "openai/gpt-4o-mini"
-    openrouter_vision_fallback_models: list[str] = [
-        "google/gemini-2.0-flash-001",
-        "google/gemini-2.0-flash-lite-001",
-    ]
+    openrouter_model: str = "openrouter/free"
+    openrouter_vision_model: str = "openrouter/free"
+    openrouter_vision_fallback_models: list[str] = []
 
     @field_validator("frontend_origins", mode="before")
     @classmethod
