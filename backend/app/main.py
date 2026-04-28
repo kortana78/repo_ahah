@@ -3,7 +3,7 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
-from fastapi import Body, FastAPI, File, Query, UploadFile, Depends, HTTPException, status
+from fastapi import Body, FastAPI, File, Form, Query, UploadFile, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -31,6 +31,7 @@ from app.schemas import (
     Token,
     User,
     DynamicDataIngest,
+    ImageJsonExtractionResponse,
     AIAnalysisRequest,
 )
 
@@ -345,6 +346,22 @@ def admin_list_dynamic_tables():
 @app.get("/api/admin/dynamic-tables/{table_name}", response_model=DynamicTablePreview)
 def admin_dynamic_table_preview(table_name: str, limit: int = Query(default=20, ge=1, le=100)):
     return postgres_service.get_dynamic_table_preview(table_name, limit)
+
+
+@app.post("/api/ai/extract-json-from-image", response_model=ImageJsonExtractionResponse)
+async def ai_extract_json_from_image(
+    file: UploadFile = File(...),
+    prompt: str = Form(default="Extract the sports data in this image into valid JSON only."),
+):
+    image_bytes = await file.read()
+    try:
+        return await postgres_service.extract_json_from_image(
+            image_bytes=image_bytes,
+            mime_type=file.content_type or "image/jpeg",
+            prompt=prompt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/ai/analyze")

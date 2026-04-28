@@ -529,6 +529,20 @@ body {
   gap: 12px;
 }
 
+.image-review {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #d8e6ff;
+  background: #f7fbff;
+  max-width: 360px;
+}
+
+.image-review__preview {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .gallery__item {
   border-radius: 12px;
   overflow: hidden;

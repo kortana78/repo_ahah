@@ -246,6 +246,21 @@ export default function Admin({ onRefresh }) {
 
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadedImages, setUploadedImages] = useState([])
+  const [imageExtractPrompt, setImageExtractPrompt] = useState('Extract the sports data in this image into clean JSON. Use arrays and objects where appropriate, and preserve team names, scores, standings, player stats, dates, and notes when visible.')
+  const [extractedJson, setExtractedJson] = useState('')
+  const [extractedRaw, setExtractedRaw] = useState('')
+  const [pictureTableName, setPictureTableName] = useState('malawi_sports_image_extract')
+  const [pictureSaveMode, setPictureSaveMode] = useState('dynamic')
+  const [picturePreviewUrl, setPicturePreviewUrl] = useState('')
+
+  function syncPicturePreview(file) {
+    if (!file) {
+      setPicturePreviewUrl('')
+      return
+    }
+    setPicturePreviewUrl(URL.createObjectURL(file))
+  }
+
   async function handleUpload(e) {
     e.preventDefault()
     if (!uploadFile) return
@@ -265,6 +280,80 @@ export default function Admin({ onRefresh }) {
         setMatchForm({ ...matchForm, image_url: data.url })
       }
     } catch (e) { setError(e.message) }
+  }
+
+  async function handleExtractImageJson() {
+    if (!uploadFile) {
+      setError('Choose an image first.')
+      return
+    }
+    setStatus('Extracting JSON from image...')
+    setError('')
+    setExtractedJson('')
+    setExtractedRaw('')
+    const formData = new FormData()
+    formData.append('file', uploadFile)
+    formData.append('prompt', imageExtractPrompt)
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/ai/extract-json-from-image`, {
+        method: 'POST',
+        body: formData,
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        throw new Error(result.detail || 'Image extraction failed')
+      }
+      setExtractedJson(JSON.stringify(result.json_data, null, 2))
+      setExtractedRaw(result.raw_response || '')
+      setStatus(`Image extracted with ${result.model}`)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  async function handleSaveExtractedJson() {
+    setStatus('Saving extracted JSON...')
+    setError('')
+    try {
+      if (!extractedJson.trim()) {
+        throw new Error('There is no extracted JSON to save.')
+      }
+      const parsed = JSON.parse(extractedJson)
+      if (pictureSaveMode === 'repository') {
+        const res = await fetch(`${apiBaseUrl}/api/repository/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(parsed),
+        })
+        const result = await res.json()
+        if (!res.ok || result.error) throw new Error(result.error || 'Repository import failed')
+        setStatus('Extracted JSON imported into the main repository data.')
+        onRefresh()
+        return
+      }
+
+      if (!pictureTableName.trim()) {
+        throw new Error('Custom table name is required.')
+      }
+      const data = Array.isArray(parsed) ? parsed : [parsed]
+      const res = await fetch(`${apiBaseUrl}/api/admin/ingest-dynamic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          table_name: pictureTableName,
+          create_if_missing: true,
+          data,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) throw new Error(result.error || 'Dynamic ingestion failed')
+      setStatus(result.message)
+      setDynamicPreview(result.preview || [])
+      setAiTableName(result.table_name || pictureTableName)
+      fetchDynamicTables()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   return (
@@ -568,9 +657,79 @@ export default function Admin({ onRefresh }) {
 
       {activeTab === 'pictures' && (
         <div className="admin__pictures">
-          <div className="upload__body" style={{ marginBottom: '20px' }}>
-            <input className="upload__input" type="file" onChange={e => setUploadFile(e.target.files[0])} accept="image/*" />
-            <button className="btn btn--primary" onClick={handleUpload}>Upload Image</button>
+          <div className="form">
+            <div className="upload__body" style={{ marginBottom: '8px' }}>
+              <input
+                className="upload__input"
+                type="file"
+                onChange={e => {
+                  const file = e.target.files?.[0] || null
+                  setUploadFile(file)
+                  syncPicturePreview(file)
+                }}
+                accept="image/*"
+              />
+              <button className="btn btn--primary" onClick={handleUpload}>Upload Image</button>
+              <button className="btn btn--ghost" onClick={handleExtractImageJson}>Extract JSON</button>
+            </div>
+
+            <div className="form__group">
+              <label className="form__label">Extraction Prompt</label>
+              <textarea
+                className="form__textarea"
+                value={imageExtractPrompt}
+                onChange={e => setImageExtractPrompt(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            {picturePreviewUrl && (
+              <div className="image-review">
+                <img src={picturePreviewUrl} alt="Selected upload" className="image-review__preview" />
+              </div>
+            )}
+
+            <div className="form__row">
+              <div className="form__group">
+                <label className="form__label">Save Mode</label>
+                <select className="form__select" value={pictureSaveMode} onChange={e => setPictureSaveMode(e.target.value)}>
+                  <option value="dynamic">Custom Table</option>
+                  <option value="repository">Repository Import</option>
+                </select>
+              </div>
+              <div className="form__group">
+                <label className="form__label">Custom Table Name</label>
+                <input
+                  className="form__input"
+                  value={pictureTableName}
+                  onChange={e => setPictureTableName(e.target.value)}
+                  disabled={pictureSaveMode !== 'dynamic'}
+                  placeholder="e.g. malawi_fixture_card_extract"
+                />
+              </div>
+            </div>
+
+            <div className="form__group">
+              <label className="form__label">Review And Edit Extracted JSON</label>
+              <textarea
+                className="form__textarea"
+                style={{ minHeight: '260px', fontFamily: 'monospace' }}
+                value={extractedJson}
+                onChange={e => setExtractedJson(e.target.value)}
+                placeholder='Extracted JSON will appear here after you run image extraction.'
+              />
+            </div>
+
+            <div className="upload__body">
+              <button className="btn btn--primary" onClick={handleSaveExtractedJson}>Confirm And Save To Database</button>
+            </div>
+
+            {extractedRaw && (
+              <div className="ai-panel">
+                <strong>Raw AI Response:</strong><br />
+                {extractedRaw}
+              </div>
+            )}
           </div>
           
           <div className="gallery">

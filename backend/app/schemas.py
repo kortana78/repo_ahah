@@ -412,3 +412,8 @@ class AIAnalysisRequest(BaseModel):
     table_name: str | None = None
     row_limit: int = Field(default=20, ge=1, le=100)
     data_context: Any | None = None
+
+class ImageJsonExtractionResponse(BaseModel):
+    json_data: Any
+    raw_response: str
+    model: str

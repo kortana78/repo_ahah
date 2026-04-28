@@ -1,6 +1,7 @@
 from contextlib import suppress
 from datetime import datetime, timezone
 from html import unescape
+import base64
 import re
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -48,6 +49,7 @@ from app.schemas import (
     DynamicDataIngest,
     DynamicTableItem,
     DynamicTablePreview,
+    ImageJsonExtractionResponse,
     AIAnalysisRequest,
 )
 from app.source_data import ASSIST_LEADERS, COMPETITION, HIGHLIGHTS, MATCHES, SOURCE_ASSETS, STANDINGS, TEAMS
@@ -1645,6 +1647,73 @@ class PostgresService:
             }
         except Exception as e:
             return {"error": f"Database error: {str(e)}"}
+
+    def _extract_json_payload(self, text: str) -> Any:
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
+            stripped = re.sub(r"\s*```$", "", stripped)
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            match = re.search(r"(\{.*\}|\[.*\])", stripped, re.DOTALL)
+            if not match:
+                raise ValueError("The AI response did not contain valid JSON.")
+            return json.loads(match.group(1))
+
+    async def extract_json_from_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+    ) -> ImageJsonExtractionResponse:
+        if not self.settings.openrouter_api_key:
+            raise ValueError("OpenRouter API key not configured")
+        if not image_bytes:
+            raise ValueError("No image data received")
+
+        data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('utf-8')}"
+        system_prompt = (
+            "You extract structured sports data from images. "
+            "Return valid JSON only. Do not wrap the response in markdown. "
+            "If some fields are uncertain, include them with null values or add a short 'notes' field."
+        )
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.settings.openrouter_api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": str(self.settings.frontend_origin),
+                    "X-Title": self.settings.app_name,
+                },
+                json={
+                    "model": self.settings.openrouter_vision_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": data_url}},
+                            ],
+                        },
+                    ],
+                },
+                timeout=90.0,
+            )
+            if response.status_code != 200:
+                raise ValueError(f"OpenRouter API error: {response.text}")
+
+        result = response.json()
+        raw_response = result["choices"][0]["message"]["content"]
+        parsed_json = self._extract_json_payload(raw_response)
+        return ImageJsonExtractionResponse(
+            json_data=parsed_json,
+            raw_response=raw_response,
+            model=self.settings.openrouter_vision_model,
+        )
 
     async def analyze_with_ai(self, payload: AIAnalysisRequest):
         if not self.settings.openrouter_api_key:

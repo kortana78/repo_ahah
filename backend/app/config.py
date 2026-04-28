@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     openrouter_api_key: str | None = None
     openrouter_model: str = "google/gemini-2.0-flash-lite-preview-02-05:free"
+    openrouter_vision_model: str = "google/gemini-2.0-flash-001"
 
 
 @lru_cache
