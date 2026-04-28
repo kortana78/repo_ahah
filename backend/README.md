@@ -22,8 +22,9 @@ The repo includes `render.yaml` for the backend web service.
 
 1. In Render, create a new Blueprint or Web Service from this repository.
 2. Set the service root to `backend` if you create it manually.
-3. Add the environment variables from `backend/.env.example`.
-4. Use this start command if you configure the service manually:
+3. The backend is pinned to Python `3.12` via `backend/.python-version`, and `render.yaml` also sets `PYTHON_VERSION=3.12.9`.
+4. Add the environment variables from `backend/.env.example`.
+5. Use this start command if you configure the service manually:
 
 ```text
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
