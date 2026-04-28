@@ -1680,7 +1680,7 @@ class PostgresService:
         )
         fallback_models = [
             model
-            for model in self.settings.openrouter_vision_fallback_models
+            for model in self.settings.openrouter_vision_fallback_models_list
             if model and model != self.settings.openrouter_vision_model
         ]
 

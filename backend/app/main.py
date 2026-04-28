@@ -39,7 +39,7 @@ settings = get_settings()
 os.makedirs(settings.uploads_dir, exist_ok=True)
 cors_origins = [
     settings.frontend_origin,
-    *settings.frontend_origins,
+    *settings.frontend_origins_list,
     "http://127.0.0.1:5173",
     "http://localhost:5173",
 ]

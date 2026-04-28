@@ -1,6 +1,5 @@
 from functools import lru_cache
 from pathlib import Path
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,7 +17,7 @@ class Settings(BaseSettings):
     app_host: str = "127.0.0.1"
     app_port: int = 8000
     frontend_origin: str = "http://localhost:5173"
-    frontend_origins: list[str] = []
+    frontend_origins: str = ""
     database_url: str | None = None
     init_db_on_startup: bool = True
     uploads_dir: Path = BASE_DIR / "uploads"
@@ -30,24 +29,20 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_model: str = "openrouter/free"
     openrouter_vision_model: str = "openrouter/free"
-    openrouter_vision_fallback_models: list[str] = []
+    openrouter_vision_fallback_models: str = ""
 
-    @field_validator("frontend_origins", mode="before")
-    @classmethod
-    def parse_frontend_origins(cls, value: str | list[str] | None) -> list[str]:
-        if value is None:
+    @property
+    def frontend_origins_list(self) -> list[str]:
+        value = self.frontend_origins
+        if not value:
             return []
-        if isinstance(value, list):
-            return [item.strip() for item in value if item and item.strip()]
         return [item.strip() for item in value.split(",") if item.strip()]
 
-    @field_validator("openrouter_vision_fallback_models", mode="before")
-    @classmethod
-    def parse_fallback_models(cls, value: str | list[str] | None) -> list[str]:
-        if value is None:
+    @property
+    def openrouter_vision_fallback_models_list(self) -> list[str]:
+        value = self.openrouter_vision_fallback_models
+        if not value:
             return []
-        if isinstance(value, list):
-            return [item.strip() for item in value if item and item.strip()]
         return [item.strip() for item in value.split(",") if item.strip()]
 
 
