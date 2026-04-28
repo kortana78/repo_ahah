@@ -37,6 +37,13 @@ from app.schemas import (
 
 settings = get_settings()
 os.makedirs(settings.uploads_dir, exist_ok=True)
+cors_origins = [
+    settings.frontend_origin,
+    *settings.frontend_origins,
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+]
+cors_origins = list(dict.fromkeys(origin for origin in cors_origins if origin))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -90,7 +97,8 @@ app.mount("/uploads", StaticFiles(directory=settings.uploads_dir), name="uploads
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin, "http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"^https://([a-z0-9-]+\.)?vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
