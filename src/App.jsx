@@ -3,7 +3,6 @@ import Admin from './Admin'
 
 const navItems = [
   { label: 'Management', icon: 'grid', href: '#admin' },
-  { label: 'Marketplace', icon: 'trophy', href: '#marketplace' },
   { label: 'Matches', icon: 'ball', href: '#matches' },
   { label: 'Standings', icon: 'shield', href: '#standings' },
   { label: 'Leaders', icon: 'user', href: '#leaders' },
@@ -16,9 +15,9 @@ const navItems = [
 const fallbackData = {
   brand: 'NyasaSport Repo',
   tagline: 'Multi-Competition Data Repository',
-  hero_badge: 'Market Valuation | Premium Scouting',
+  hero_badge: 'Data Collection | AI Extraction',
   hero_title: 'NyasaSport Repository',
-  hero_body: 'Professional scouting data, player valuations, and premium match assets for teams.',
+  hero_body: 'Collect match data, standings, teams, and image-based sports records in one place.',
   active_competition: null,
   stats: [
     { label: 'Tracked Teams', value: '16' },
@@ -28,13 +27,13 @@ const fallbackData = {
   ],
   highlights: [
     {
-      title: 'Scouting Portal',
-      body: 'Verified player market values and tactical data tiers for team recruitment.',
-      icon_key: 'user',
+      title: 'Structured Collection',
+      body: 'Capture competitions, teams, match logs, and standings in reusable JSON formats.',
+      icon_key: 'grid',
     },
     {
-      title: 'Commercial Assets',
-      body: 'High-quality match images and datasets available for commercial licensing.',
+      title: 'Image Extraction',
+      body: 'Turn sports graphics and screenshots into editable JSON before saving them.',
       icon_key: 'trophy',
     },
     {
@@ -59,7 +58,6 @@ const fallbackData = {
   top_scorers: [],
   assist_leaders: [],
   source_assets: [],
-  market_valuations: [],
 }
 
 function Icon({ kind }) {
@@ -124,14 +122,6 @@ export default function App() {
   const [analysisResponse, setAnalysisResponse] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   
-  // Auth and Player Profile state
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(localStorage.getItem('token'))
-  const [showLogin, setShowLogin] = useState(false)
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' })
-  const [selectedPlayerId, setSelectedPlayerId] = useState(null)
-  const [transferCard, setTransferCard] = useState(null)
-
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000'
 
   const loadOverview = useCallback(async (competitionId = null) => {
@@ -175,61 +165,7 @@ export default function App() {
   useEffect(() => {
     loadOverview()
     loadDynamicTables()
-    if (token) fetchMe()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function fetchMe() {
-    try {
-      const res = await fetch(`${apiBaseUrl}/api/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (res.ok) setUser(await res.json())
-      else {
-        setToken(null)
-        localStorage.removeItem('token')
-      }
-    } catch (e) { console.error(e) }
-  }
-
-  async function handleLogin(e) {
-    e.preventDefault()
-    try {
-      const formData = new URLSearchParams()
-      formData.append('username', loginForm.username)
-      formData.append('password', loginForm.password)
-      const res = await fetch(`${apiBaseUrl}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
-      })
-      if (!res.ok) throw new Error('Login failed')
-      const { access_token } = await res.json()
-      setToken(access_token)
-      localStorage.setItem('token', access_token)
-      setShowLogin(false)
-      fetchMe()
-    } catch (e) { alert(e.message) }
-  }
-
-  async function loadTransferCard(playerId) {
-    if (!token) {
-      setShowLogin(true)
-      return
-    }
-    try {
-      const res = await fetch(`${apiBaseUrl}/api/players/${playerId}/transfer-card`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (res.ok) {
-        setTransferCard(await res.json())
-        setSelectedPlayerId(playerId)
-      } else if (res.status === 403) {
-        alert("This is a Premium Scout feature. Please upgrade your account.")
-      } else {
-        throw new Error('Failed to load transfer card')
-      }
-    } catch (e) { alert(e.message) }
-  }
 
   const activeCompetition = useMemo(() => {
     if (!data?.competitions?.length) return null
@@ -389,23 +325,6 @@ export default function App() {
               {item.label}
             </a>
           ))}
-          {user ? (
-            <div className="side__link" style={{ marginTop: 'auto', borderTop: '1px solid var(--border)' }}>
-              <Icon kind="user" />
-              <span>{user.username} ({user.role})</span>
-              <button 
-                onClick={() => { setToken(null); setUser(null); localStorage.removeItem('token'); }}
-                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer' }}
-              >
-                Logout
-              </button>
-            </div>
-          ) : (
-            <button className="side__link" style={{ width: '100%', textAlign: 'left', marginTop: 'auto' }} onClick={() => setShowLogin(true)}>
-              <Icon kind="user" />
-              Login / Scout Access
-            </button>
-          )}
         </nav>
 
         <div className="side__footer">
@@ -415,71 +334,6 @@ export default function App() {
 
       <main className="pl-main">
         <Admin onRefresh={() => loadOverview()} />
-
-        <section className="content" id="marketplace">
-          <div className="content__left">
-            <div className="panel">
-              <div className="panel__header">
-                <h3>Top Market Valuations</h3>
-                <span>Scouting Data</span>
-              </div>
-              <div className="standings">
-                <div className="standings__head" style={{ gridTemplateColumns: '1.5fr 1fr 1fr auto' }}>
-                  <span>Player</span>
-                  <span>Team</span>
-                  <span>Value</span>
-                  <span>Status</span>
-                </div>
-                {data.market_valuations.map((p) => (
-                  <div 
-                    key={p.player_id} 
-                    className="standings__row" 
-                    style={{ gridTemplateColumns: '1.5fr 1fr 1fr auto', cursor: 'pointer' }}
-                    onClick={() => loadTransferCard(p.player_id)}
-                  >
-                    <span style={{ fontWeight: 600 }}>{p.player_name}</span>
-                    <span>{p.team_name}</span>
-                    <span style={{ color: 'var(--blue)', fontWeight: 700 }}>
-                      {p.currency} {new Intl.NumberFormat().format(p.market_value)}
-                    </span>
-                    <span>
-                      {p.is_premium ? <Badge>Premium</Badge> : <small style={{ color: 'var(--muted)' }}>Public</small>}
-                    </span>
-                  </div>
-                ))}
-                {data.market_valuations.length === 0 && (
-                  <p className="hero__subtitle" style={{ padding: '20px', textAlign: 'center' }}>
-                    No market valuations recorded yet. Add them in Management.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="content__right">
-            <div className="panel">
-              <div className="panel__header">
-                <h3>Premium Assets</h3>
-                <span>For Sale</span>
-              </div>
-              <div className="leader-list">
-                {data.source_assets.filter(a => a.is_premium).map((asset) => (
-                  <div key={asset.id} className="leader">
-                    <div>
-                      <strong>{asset.label}</strong>
-                      <small>{asset.category}</small>
-                    </div>
-                    <span>MWK {new Intl.NumberFormat().format(asset.price)}</span>
-                  </div>
-                ))}
-                {data.source_assets.filter(a => a.is_premium).length === 0 && (
-                  <p className="hero__subtitle">No premium assets available.</p>
-                )}
-              </div>
-              <Button variant="ghost" style={{ marginTop: '12px', width: '100%' }}>View Full Catalog</Button>
-            </div>
-          </div>
-        </section>
 
         <section className="content" id="matches">
           <div className="content__left">
@@ -738,99 +592,6 @@ export default function App() {
         </section>
       </main>
 
-      {showLogin && (
-        <div className="modal-overlay">
-          <div className="panel modal-content">
-            <div className="panel__header">
-              <h3>Scout & Agent Login</h3>
-              <button onClick={() => setShowLogin(false)}>&times;</button>
-            </div>
-            <form onSubmit={handleLogin} className="form">
-              <div className="form__group">
-                <label className="form__label">Username</label>
-                <input className="form__input" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} required />
-              </div>
-              <div className="form__group">
-                <label className="form__label">Password</label>
-                <input className="form__input" type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} required />
-              </div>
-              <Button type="submit" style={{ width: '100%' }}>Login</Button>
-              <p style={{ marginTop: '12px', fontSize: '11px', color: 'var(--muted)' }}>
-                Access restricted to verified scouts and agents.
-              </p>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {transferCard && (
-        <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '800px', width: '90%' }}>
-            <div className="panel__header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <TeamMark text={transferCard.player.team_name.substring(0,2).toUpperCase()} />
-                <div>
-                  <h3 style={{ margin: 0 }}>{transferCard.player.name}</h3>
-                  <small style={{ color: 'var(--blue)' }}>{transferCard.player.position} | {transferCard.player.team_name}</small>
-                </div>
-              </div>
-              <button onClick={() => setTransferCard(null)}>&times;</button>
-            </div>
-            
-            <div className="transfer-card-grid">
-              <div className="card-section">
-                <h4>Personal Details</h4>
-                <div className="details-list">
-                  <div><span>Citizenship</span> <strong>{transferCard.player.citizenship || 'N/A'}</strong></div>
-                  <div><span>Preferred Foot</span> <strong>{transferCard.player.preferred_foot || 'N/A'}</strong></div>
-                  <div><span>Height</span> <strong>{transferCard.player.height_cm ? `${transferCard.player.height_cm}cm` : 'N/A'}</strong></div>
-                  <div><span>Weight</span> <strong>{transferCard.player.weight_kg ? `${transferCard.player.weight_kg}kg` : 'N/A'}</strong></div>
-                  <div><span>Age</span> <strong>{transferCard.player.date_of_birth ? new Date().getFullYear() - new Date(transferCard.player.date_of_birth).getFullYear() : 'N/A'}</strong></div>
-                </div>
-              </div>
-
-              <div className="card-section">
-                <h4>Contract & Agent</h4>
-                <div className="details-list">
-                  <div><span>Expires</span> <strong style={{ color: 'var(--blue)' }}>{transferCard.player.contract_expires || 'N/A'}</strong></div>
-                  <div><span>Status</span> <strong>{transferCard.player.is_transfer_listed ? <Badge>Transfer Listed</Badge> : 'Active'}</strong></div>
-                  <div><span>Agency</span> <strong>{transferCard.player.agent_name || 'Independent'}</strong></div>
-                </div>
-              </div>
-
-              <div className="card-section" style={{ gridColumn: 'span 2' }}>
-                <h4>Market Value Trend</h4>
-                <div style={{ height: '60px', background: 'var(--surface-light)', borderRadius: '4px', display: 'flex', alignItems: 'flex-end', padding: '8px', gap: '4px' }}>
-                  {transferCard.valuation_history.map((v, i) => (
-                    <div key={i} style={{ flex: 1, background: 'var(--blue)', height: `${(v.valuation / transferCard.player.market_value) * 100}%`, minHeight: '4px' }} title={v.date}></div>
-                  ))}
-                  {transferCard.valuation_history.length === 0 && <span style={{ fontSize: '11px', color: 'var(--muted)' }}>No historical data available.</span>}
-                </div>
-                <div style={{ marginTop: '8px', textAlign: 'right' }}>
-                  <small>Current Valuation:</small> 
-                  <strong style={{ display: 'block', fontSize: '18px', color: 'var(--blue)' }}>{transferCard.player.currency} {new Intl.NumberFormat().format(transferCard.player.market_value)}</strong>
-                </div>
-              </div>
-
-              <div className="card-section">
-                <h4>Recent Highlights</h4>
-                <ul style={{ paddingLeft: '20px', fontSize: '12px' }}>
-                  {transferCard.highlights.map((h, i) => <li key={i}>{h}</li>)}
-                  {transferCard.highlights.length === 0 && <li>No recent match highlights.</li>}
-                </ul>
-              </div>
-
-              <div className="card-section">
-                <h4>Scout Actions</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Button style={{ width: '100%' }}>Download Transfer Card (PDF)</Button>
-                  <Button variant="ghost" style={{ width: '100%' }}>Contact Agent</Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
