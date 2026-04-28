@@ -1497,25 +1497,128 @@ class PostgresService:
             if row["table_name"] not in core_tables and not row["table_name"].startswith("pg_")
         }
 
+    def _is_int(self, value: Any) -> bool:
+        if isinstance(value, int) and not isinstance(value, bool):
+            return True
+        if isinstance(value, str):
+            try:
+                int(value.strip())
+                return True
+            except (ValueError, AttributeError):
+                return False
+        return False
+
+    def _is_float(self, value: Any) -> bool:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return True
+        if isinstance(value, str):
+            try:
+                float(value.strip())
+                return True
+            except (ValueError, AttributeError):
+                return False
+        return False
+
+    def _is_iso_timestamp(self, value: Any) -> bool:
+        if isinstance(value, datetime):
+            return True
+        if isinstance(value, str):
+            try:
+                # Basic check for ISO-like format
+                if len(value) < 10:
+                    return False
+                datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+                return True
+            except (ValueError, AttributeError):
+                return False
+        return False
+
+    def _is_iso_date(self, value: Any) -> bool:
+        if isinstance(value, str):
+            try:
+                # Expect YYYY-MM-DD
+                val = value.strip()
+                if len(val) == 10 and re.match(r"^\d{4}-\d{2}-\d{2}$", val):
+                    datetime.strptime(val, "%Y-%m-%d")
+                    return True
+            except (ValueError, AttributeError):
+                return False
+        return False
+
     def _infer_dynamic_column_type(self, values: list[Any]) -> str:
-        non_null_values = [value for value in values if value is not None]
+        non_null_values = [value for value in values if value is not None and str(value).strip() != ""]
         if not non_null_values:
             return "TEXT"
+
         if any(isinstance(value, (dict, list)) for value in non_null_values):
             return "JSONB"
-        if all(isinstance(value, bool) for value in non_null_values):
+
+        if all(
+            isinstance(value, bool)
+            or (isinstance(value, str) and value.strip().lower() in ("true", "false", "yes", "no", "1", "0"))
+            for value in non_null_values
+        ):
             return "BOOLEAN"
-        if all(isinstance(value, int) and not isinstance(value, bool) for value in non_null_values):
+
+        if all(self._is_int(value) for value in non_null_values):
             return "INTEGER"
-        if all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in non_null_values):
+
+        if all(self._is_float(value) for value in non_null_values):
             return "DOUBLE PRECISION"
+
+        if all(self._is_iso_timestamp(value) for value in non_null_values):
+            return "TIMESTAMPTZ"
+
+        if all(self._is_iso_date(value) for value in non_null_values):
+            return "DATE"
+
         return "TEXT"
 
     def _coerce_dynamic_value(self, value: Any) -> Any:
+        if value is None:
+            return None
+
         if isinstance(value, (dict, list)):
             return Jsonb(value)
+
         if isinstance(value, datetime):
-            return value.isoformat()
+            return value
+
+        if isinstance(value, str):
+            val_strip = value.strip()
+            if not val_strip:
+                return None
+
+            # Boolean check
+            val_lower = val_strip.lower()
+            if val_lower in ("true", "yes"):
+                return True
+            if val_lower in ("false", "no"):
+                return False
+
+            # Try numeric - avoid leading zeros unless it's just '0'
+            try:
+                if val_strip.isdigit():
+                    if len(val_strip) > 1 and val_strip.startswith("0"):
+                        pass # Keep as string if it has leading zeros (e.g. phone numbers)
+                    else:
+                        return int(val_strip)
+                if "." in val_strip:
+                    return float(val_strip)
+            except ValueError:
+                pass
+
+            # Try date/timestamp
+            try:
+                if len(val_strip) == 10 and re.match(r"^\d{4}-\d{2}-\d{2}$", val_strip):
+                    return datetime.strptime(val_strip, "%Y-%m-%d").date()
+                if len(val_strip) >= 10:
+                    return datetime.fromisoformat(val_strip.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                pass
+
+            return val_strip
+
         return value
 
     def _get_dynamic_columns(self, cur, table_name: str) -> dict[str, str]:
@@ -1565,6 +1668,8 @@ class PostgresService:
         return DynamicTablePreview(table_name=normalized_table_name, columns=columns, rows=rows)
 
     def ingest_dynamic_data(self, payload: DynamicDataIngest):
+        import hashlib
+
         if not payload.data:
             return {"message": "No data to ingest"}
 
@@ -1580,17 +1685,35 @@ class PostgresService:
                         return {"error": f"Table '{table_name}' does not exist."}
 
                     column_samples: dict[str, list[Any]] = {}
+                    processed_rows = []
+
                     for row in payload.data:
                         if not isinstance(row, dict):
                             continue
+
+                        # Clean and normalize the row
+                        valid_row = {}
                         for key, value in row.items():
                             col_name = self._normalize_identifier(key)
-                            if not col_name or col_name in {"id", "ingested_at"}:
+                            if not col_name or col_name in {"id", "ingested_at", "_row_hash"}:
                                 continue
-                            column_samples.setdefault(col_name, []).append(value)
+                            cleaned_value = self._coerce_dynamic_value(value)
+                            valid_row[col_name] = cleaned_value
+                            column_samples.setdefault(col_name, []).append(cleaned_value)
+
+                        if not valid_row:
+                            continue
+
+                        # Calculate row hash for deduplication
+                        row_json = json.dumps(valid_row, sort_keys=True, default=str).encode("utf-8")
+                        row_hash = hashlib.sha256(row_json).hexdigest()
+                        valid_row["_row_hash"] = row_hash
+                        column_samples.setdefault("_row_hash", []).append(row_hash)
+
+                        processed_rows.append(valid_row)
 
                     if not column_samples:
-                        return {"error": "No valid columns found in data"}
+                        return {"error": "No valid data found to ingest"}
 
                     inferred_columns = {
                         col_name: self._infer_dynamic_column_type(values)
@@ -1607,6 +1730,15 @@ class PostgresService:
                                 "CREATE TABLE {} (id SERIAL PRIMARY KEY, ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), {})"
                             ).format(sql.Identifier(table_name), sql.SQL(", ").join(create_columns))
                         )
+                        # Add unique index on _row_hash for deduplication
+                        try:
+                            cur.execute(
+                                sql.SQL("CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} (_row_hash)").format(
+                                    sql.Identifier(f"idx_{table_name}_hash"), sql.Identifier(table_name)
+                                )
+                            )
+                        except Exception:
+                            pass
                     else:
                         existing_columns = self._get_dynamic_columns(cur, table_name)
                         for col_name, col_type in inferred_columns.items():
@@ -1618,19 +1750,26 @@ class PostgresService:
                                         sql.SQL(col_type),
                                     )
                                 )
+                        
+                        # Ensure _row_hash has a unique index even on existing tables
+                        if "_row_hash" in inferred_columns:
+                            try:
+                                cur.execute(
+                                    sql.SQL("CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} (_row_hash)").format(
+                                        sql.Identifier(f"idx_{table_name}_hash"),
+                                        sql.Identifier(table_name),
+                                    )
+                                )
+                            except Exception:
+                                # If unique index fails (e.g. duplicates exist), just continue
+                                pass
 
-                    for row in payload.data:
-                        valid_row = {
-                            self._normalize_identifier(key): self._coerce_dynamic_value(value)
-                            for key, value in row.items()
-                            if self._normalize_identifier(key) and self._normalize_identifier(key) not in {"id", "ingested_at"}
-                        }
-                        valid_row = {key: value for key, value in valid_row.items() if key}
-                        if not valid_row:
-                            continue
+                    for valid_row in processed_rows:
                         keys = list(valid_row.keys())
                         cur.execute(
-                            sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+                            sql.SQL(
+                                "INSERT INTO {} ({}) VALUES ({}) ON CONFLICT (_row_hash) DO NOTHING"
+                            ).format(
                                 sql.Identifier(table_name),
                                 sql.SQL(", ").join(sql.Identifier(key) for key in keys),
                                 sql.SQL(", ").join(sql.Placeholder(key) for key in keys),
@@ -1638,9 +1777,9 @@ class PostgresService:
                             valid_row,
                         )
                 conn.commit()
-            preview = self.get_dynamic_table_preview(table_name, limit=min(5, len(payload.data)))
+            preview = self.get_dynamic_table_preview(table_name, limit=min(5, len(processed_rows)))
             return {
-                "message": f"Successfully ingested {len(payload.data)} rows into {table_name}",
+                "message": f"Successfully ingested {len(processed_rows)} rows into {table_name}",
                 "table_name": table_name,
                 "columns": preview.columns,
                 "preview": preview.rows,
