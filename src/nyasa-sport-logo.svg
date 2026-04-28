@@ -1,0 +1,37 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="800" height="240" viewBox="0 0 800 240" role="img" aria-label="Nyasa Sport logo">
+  <defs>
+    <style>
+      .ns-black { stroke: #111111; fill: none; }
+      .ns-accent { stroke: #2b6cff; fill: none; }
+      .ns-accent-fill { fill: #2b6cff; }
+      .ns-text { fill: #111111; font-family: "Montserrat", "Segoe UI", Arial, sans-serif; font-weight: 600; letter-spacing: 0.5px; }
+      .ns-sub { fill: #111111; font-family: "Montserrat", "Segoe UI", Arial, sans-serif; font-weight: 500; letter-spacing: 2px; }
+    </style>
+  </defs>
+
+  <g transform="translate(40, 30)">
+    <!-- Symbol: sport ball + data lines -->
+    <circle cx="90" cy="90" r="62" class="ns-black" stroke-width="6" />
+
+    <!-- Flowing data path -->
+    <path d="M38 122 C64 98, 86 90, 118 72" class="ns-accent" stroke-width="5" stroke-linecap="round" />
+    <path d="M58 58 C76 76, 96 84, 132 102" class="ns-black" stroke-width="4" stroke-linecap="round" />
+
+    <!-- Nodes -->
+    <circle cx="58" cy="58" r="4" class="ns-accent-fill" />
+    <circle cx="90" cy="90" r="4" class="ns-accent-fill" />
+    <circle cx="118" cy="72" r="4" class="ns-accent-fill" />
+
+    <!-- Signal/motion arcs -->
+    <path d="M155 68 C172 78, 172 102, 155 112" class="ns-accent" stroke-width="4" stroke-linecap="round" />
+    <path d="M168 60 C190 76, 190 104, 168 120" class="ns-accent" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- Wordmark -->
+  <g transform="translate(250, 80)">
+    <text x="0" y="40" font-size="54" class="ns-text">Nyasa</text>
+    <text x="165" y="40" font-size="54" class="ns-text">Sport</text>
+    <rect x="0" y="62" width="300" height="2" class="ns-accent-fill" />
+    <text x="0" y="95" font-size="16" class="ns-sub">DATA STREAM ATHLETICS</text>
+  </g>
+</svg>

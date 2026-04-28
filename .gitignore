@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.npm-cache/
+
+backend/.env
+backend/uploads/
+backend/app/__pycache__/
+backend/**/*.pyc
+
+.DS_Store
+Thumbs.db
