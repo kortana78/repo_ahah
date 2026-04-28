@@ -35,6 +35,7 @@ from app.schemas import (
 )
 
 settings = get_settings()
+os.makedirs(settings.uploads_dir, exist_ok=True)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -76,8 +77,6 @@ def check_role(user: User, required_roles: list[UserRole]):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Ensure uploads directory exists
-    os.makedirs(settings.uploads_dir, exist_ok=True)
     try_connect()
     yield
     close_connection()
