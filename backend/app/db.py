@@ -1678,6 +1678,11 @@ class PostgresService:
             "Return valid JSON only. Do not wrap the response in markdown. "
             "If some fields are uncertain, include them with null values or add a short 'notes' field."
         )
+        fallback_models = [
+            model
+            for model in self.settings.openrouter_vision_fallback_models
+            if model and model != self.settings.openrouter_vision_model
+        ]
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1690,6 +1695,7 @@ class PostgresService:
                 },
                 json={
                     "model": self.settings.openrouter_vision_model,
+                    "models": fallback_models,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {

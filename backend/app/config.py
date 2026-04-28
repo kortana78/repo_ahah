@@ -29,11 +29,24 @@ class Settings(BaseSettings):
 
     openrouter_api_key: str | None = None
     openrouter_model: str = "google/gemini-2.0-flash-lite-preview-02-05:free"
-    openrouter_vision_model: str = "google/gemini-2.0-flash-001"
+    openrouter_vision_model: str = "openai/gpt-4o-mini"
+    openrouter_vision_fallback_models: list[str] = [
+        "google/gemini-2.0-flash-001",
+        "google/gemini-2.0-flash-lite-001",
+    ]
 
     @field_validator("frontend_origins", mode="before")
     @classmethod
     def parse_frontend_origins(cls, value: str | list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [item.strip() for item in value if item and item.strip()]
+        return [item.strip() for item in value.split(",") if item.strip()]
+
+    @field_validator("openrouter_vision_fallback_models", mode="before")
+    @classmethod
+    def parse_fallback_models(cls, value: str | list[str] | None) -> list[str]:
         if value is None:
             return []
         if isinstance(value, list):
